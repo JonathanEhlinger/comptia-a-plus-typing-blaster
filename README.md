@@ -1,4 +1,5 @@
-<<<<<<< HEAD
+![Gameplay Screenshot](screenshot.png)
+
 # CompTIA A+ Typing Blaster
 
 A fun, interactive typing game to help you master CompTIA A+ acronyms and definitions!
@@ -61,7 +62,3 @@ MIT License
 ---
 
 **Stay tuned for the Security+ version!**
-=======
-# comptia-a-plus-typing-blaster
-work in progress study game for comp tia a+ certification.
->>>>>>> 78e30ad5ae3fe797421432f3e2e19fde87335fec
