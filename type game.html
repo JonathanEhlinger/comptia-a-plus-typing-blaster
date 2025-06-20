@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CompTIA A+ Typing Blaster</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: #0f0;
+      font-family: monospace;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+    }
+    #input {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      padding: 8px;
+      border: none;
+      background: #222;
+      color: #0f0;
+      outline: none;
+      width: 60%;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <input type="text" id="input" autofocus placeholder="Type the term and press Enter" />
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const terms = [
+      "BIOS", "POST", "CMOS", "UEFI", "RAM", "SSD",
+      "HDD", "IPCONFIG", "PING", "TASKKILL", "FAT32",
+      "NTFS", "DEVICE MANAGER", "DISKPART", "REGEDIT",
+      "SAFE MODE", "BOOTREC", "CHKDSK", "DRIVER", "MSCONFIG"
+    ];
+
+    let asteroids = [];
+    let input = document.getElementById("input");
+    let score = 0;
+
+    class Asteroid {
+      constructor(word) {
+        this.word = word;
+        this.x = Math.random() * (canvas.width - 100);
+        this.y = -40;
+        this.speed = Math.random() * 1.5 + 0.5;
+      }
+
+      draw() {
+        ctx.fillStyle = "#0f0";
+        ctx.font = "24px monospace";
+        ctx.fillText(this.word, this.x, this.y);
+      }
+
+      update() {
+        this.y += this.speed;
+      }
+    }
+
+    function spawnAsteroid() {
+      const term = terms[Math.floor(Math.random() * terms.length)];
+      asteroids.push(new Asteroid(term));
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      asteroids.forEach((a, i) => {
+        a.update();
+        a.draw();
+
+        if (a.y > canvas.height) {
+          asteroids.splice(i, 1); // remove missed
+        }
+      });
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "18px monospace";
+      ctx.fillText("Score: " + score, 10, 20);
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const typed = input.value.trim().toUpperCase();
+        for (let i = 0; i < asteroids.length; i++) {
+          if (asteroids[i].word === typed) {
+            asteroids.splice(i, 1);
+            score += 1;
+            break;
+          }
+        }
+        input.value = "";
+      }
+    });
+
+    setInterval(spawnAsteroid, 2000);
+    gameLoop();
+  </script>
+</body>
+</html>
+

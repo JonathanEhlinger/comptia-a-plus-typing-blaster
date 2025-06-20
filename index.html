@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CompTIA A+ Typing Blaster</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: #0f0;
+      font-family: monospace;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+    }
+    #input {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      padding: 8px;
+      border: none;
+      background: #111;
+      color: #0f0;
+      outline: none;
+      width: 60%;
+    }
+    #definition {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #111;
+      color: #0f0;
+      padding: 16px 32px;
+      border-radius: 8px;
+      font-size: 20px;
+      opacity: 0.95;
+      z-index: 10;
+      min-width: 400px;
+      text-align: center;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="1200" height="800"></canvas>
+  <div id="targetDisplay" style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);font-size:28px;font-family:monospace;z-index:15;max-width:90vw;word-break:break-word;"></div>
+  <input type="text" id="input" autofocus placeholder="Type the term and definition and press Enter" style="font-size:28px;width:70%;" />
+  <audio id="blastSound" src="https://freesound.org/data/previews/109/109662_945474-lq.mp3"></audio>
+  <div id="definition"></div>
+  <div style="position:absolute;top:10px;right:20px;z-index:20;">
+    <button id="soundToggle">🔊</button>
+    <button id="speedDown">-</button>
+    <span id="speedDisplay">Speed: 1</span>
+    <button id="speedUp">+</button>
+  </div>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const input = document.getElementById("input");
+    const blastSound = document.getElementById("blastSound");
+    const definitionBox = document.getElementById("definition");
+
+    // Terms and definitionsA
+    const termDefs = [
+      { term: "DDoS", def: "Distributed Denial of Service" },
+      { term: "APT", def: "Advanced Persistent Threat" },
+      { term: "RSA", def: "Rivest Shamir Adleman" },
+      { term: "DoD 8140", def: "Department of Defense Instruction 8140" },
+      { term: "TCP/IP", def: "Transmission Control Protocol Internet Protocol" },
+      { term: "OSI/RM", def: "Open Systems Interconnection Reference Model" },
+      { term: "VPN", def: "Virtual Private Network" },
+      { term: "S.M.A.R.T.", def: "Self Monitoring Analysis and Reporting Technology" },
+      { term: "DMZ", def: "Demilitarized Zone" },
+      { term: "HDD", def: "Hard Disk Drive" },
+      { term: "DHCP", def: "Dynamic Host Configuration Protocol" },
+      { term: "MBR", def: "Master Boot Record" },
+      { term: "GUI", def: "Graphical User Interface" },
+      { term: "BIOS", def: "Basic Input Output System" },
+      { term: "DAC", def: "Discretionary Access Control" },
+      { term: "VGA", def: "Video Graphics Array" },
+      { term: "CMOS", def: "Complementary Metal Oxide Semiconductor" },
+      { term: "DRAM", def: "Dynamic Random Access Memory" },
+      { term: "IDE", def: "Integrated Drive Electronics" },
+      { term: "ISP", def: "Internet Service Provider" },
+      { term: "CPU", def: "Central Processing Unit" },
+      { term: "DSL", def: "Digital Subscriber Line" }
+    ];
+    const terms = termDefs.map(t => t.term);
+
+    let asteroids = [];
+    let score = 0;
+    let speed = 0.2; // slower default speed
+    let showDefTimeout = null;
+
+    class Asteroid {
+      constructor(termObj) {
+        this.termObj = termObj;
+        this.text = getAsteroidText(termObj);
+        this.x = Math.random() * (canvas.width - 600) + 300;
+        this.y = -120; // spawn higher
+        this.speed = speed + Math.random() * 0.2;
+        this.radius = 120;
+        this.broken = false;
+        this.pieces = [];
+      }
+      draw() {
+        if (this.broken) {
+          this.pieces.forEach(p => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 18, 0, Math.PI * 2);
+            ctx.fillStyle = "#0f0";
+            ctx.globalAlpha = p.alpha;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.closePath();
+            ctx.restore();
+          });
+        } else {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(this.x + this.radius / 2, this.y + this.radius / 2, this.radius / 2, 0, Math.PI * 2);
+          ctx.shadowColor = "#0f0";
+          ctx.shadowBlur = 40;
+          ctx.fillStyle = "#222";
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.closePath();
+          ctx.restore();
+          ctx.fillStyle = "#0f0";
+          ctx.font = "24px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(this.text, this.x + this.radius / 2, this.y + this.radius / 2 + 12, this.radius*1.5);
+        }
+      }
+      update() {
+        if (this.broken) {
+          this.pieces.forEach(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.alpha -= 0.03;
+          });
+          this.pieces = this.pieces.filter(p => p.alpha > 0);
+        } else {
+          this.y += this.speed;
+        }
+      }
+      breakApart() {
+        this.broken = true;
+        this.pieces = [];
+        for (let i = 0; i < 10; i++) {
+          this.pieces.push({
+            x: this.x + this.radius / 2,
+            y: this.y + this.radius / 2,
+            vx: Math.cos((i/10)*2*Math.PI)*4 + Math.random()*2,
+            vy: Math.sin((i/10)*2*Math.PI)*4 + Math.random()*2,
+            alpha: 1
+          });
+        }
+      }
+      isGone() {
+        return this.broken && this.pieces.length === 0;
+      }
+    }
+
+    // Rocket and projectile
+    function getRocketY() {
+      // Align rocket with input bar (10px from bottom + input height + margin)
+      const inputElem = document.getElementById('input');
+      const rect = inputElem.getBoundingClientRect();
+      // 10px from bottom + input height (approx 40px) + 10px margin
+      return canvas.height - 10 - 40;
+    }
+    const rocket = {
+      x: canvas.width/2,
+      get y() { return getRocketY(); },
+      width: 40,
+      height: 60
+    };
+    let projectile = null;
+    let projectileTarget = null;
+
+    function drawRocket() {
+      ctx.save();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.moveTo(rocket.x, rocket.y);
+      ctx.lineTo(rocket.x-rocket.width/2, rocket.y+rocket.height);
+      ctx.lineTo(rocket.x+rocket.width/2, rocket.y+rocket.height);
+      ctx.closePath();
+      ctx.fillStyle = "#888";
+      ctx.fill();
+      ctx.fillStyle = "#0f0";
+      ctx.fillRect(rocket.x-8, rocket.y+rocket.height-10, 16, 10);
+      ctx.restore();
+    }
+    function drawProjectile() {
+      if (projectile) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(projectile.x, projectile.y, 8, 0, Math.PI*2);
+        ctx.fillStyle = "#ff0";
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function getAsteroidText(termObj) {
+      return `${termObj.term} ${termObj.def}`;
+    }
+
+    function spawnAsteroid() {
+      if (asteroids.length < 2) {
+        const termObj = termDefs[Math.floor(Math.random() * termDefs.length)];
+        asteroids.push(new Asteroid(termObj));
+      }
+    }
+
+    function showDefinition(term) {
+      const found = termDefs.find(t => t.term.toUpperCase() === term.toUpperCase());
+      if (found) {
+        definitionBox.textContent = `${found.term}: ${found.def}`;
+        definitionBox.style.display = "block";
+        if (showDefTimeout) clearTimeout(showDefTimeout);
+        showDefTimeout = setTimeout(() => {
+          definitionBox.style.display = "none";
+        }, 2000);
+      }
+    }
+
+    function updateGame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Draw rocket
+      drawRocket();
+      // Draw projectile
+      drawProjectile();
+      // Update/draw asteroids
+      for (let i = asteroids.length - 1; i >= 0; i--) {
+        asteroids[i].update();
+        asteroids[i].draw();
+        if (!asteroids[i].broken && asteroids[i].y > canvas.height) {
+          asteroids.splice(i, 1);
+          score = Math.max(score - 1, 0);
+        } else if (asteroids[i].isGone()) {
+          asteroids.splice(i, 1);
+        }
+      }
+      ctx.fillStyle = "white";
+      ctx.font = "18px monospace";
+      ctx.textAlign = "left";
+      ctx.fillText("Score: " + score, 10, 25);
+      requestAnimationFrame(updateGame);
+      // Move projectile
+      if (projectile && projectileTarget) {
+        const dx = projectileTarget.x + projectileTarget.radius/2 - projectile.x;
+        const dy = projectileTarget.y + projectileTarget.radius/2 - projectile.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 30) {
+          projectile = null;
+          projectileTarget.breakApart();
+        } else {
+          projectile.x += dx/dist*16;
+          projectile.y += dy/dist*16;
+        }
+      }
+    }
+
+    const soundToggle = document.getElementById("soundToggle");
+    const speedUpBtn = document.getElementById("speedUp");
+    const speedDownBtn = document.getElementById("speedDown");
+    const speedDisplay = document.getElementById("speedDisplay");
+    let soundOn = true;
+
+    soundToggle.onclick = () => {
+      soundOn = !soundOn;
+      soundToggle.textContent = soundOn ? "🔊" : "🔇";
+    };
+    speedUpBtn.onclick = () => {
+      speed += 0.5;
+      speedDisplay.textContent = `Speed: ${speed}`;
+    };
+    speedDownBtn.onclick = () => {
+      speed = Math.max(0.01, speed - 0.5);
+      speedDisplay.textContent = `Speed: ${speed}`;
+    };
+
+    function getNormalized(str) {
+      // Remove all non-alphanumeric and spaces, and lowercase
+      return str.replace(/[^a-zA-Z0-9 ]/g, '').toLowerCase();
+    }
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const typed = getNormalized(input.value.trim());
+        for (let i = 0; i < asteroids.length; i++) {
+          if (!asteroids[i].broken && getNormalized(asteroids[i].text) === typed) {
+            showDefinition(asteroids[i].termObj.term);
+            if (soundOn) {
+              blastSound.currentTime = 0;
+              blastSound.play();
+            }
+            score += 1;
+            asteroids[i].breakApart();
+            break;
+          }
+        }
+        input.value = "";
+      }
+    });
+    // Highlight typed letters for the first orb (case-insensitive, ignore symbols)
+    const targetDisplay = document.getElementById('targetDisplay');
+    input.addEventListener("input", () => {
+      if (asteroids.length > 0) {
+        const target = asteroids[0].text;
+        const typed = input.value;
+        let html = '';
+        let tIdx = 0, iIdx = 0;
+        while (tIdx < target.length) {
+          const targetChar = target[tIdx];
+          if (!/[a-zA-Z0-9 ]/.test(targetChar)) {
+            html += `<span style=\"color:#0f0;opacity:0.5;\">${targetChar}</span>`;
+            tIdx++;
+            continue;
+          }
+          let typedChar = '';
+          while (iIdx < typed.length && !/[a-zA-Z0-9 ]/.test(typed[iIdx])) iIdx++;
+          if (iIdx < typed.length) typedChar = typed[iIdx];
+          if (typedChar && typedChar.toLowerCase() === targetChar.toLowerCase()) {
+            html += `<span style=\"color:#4cf;\">${targetChar}</span>`;
+            iIdx++;
+          } else if (typedChar) {
+            html += `<span style=\"color:#f44;\">${targetChar}</span>`;
+            iIdx++;
+          } else {
+            html += `<span style=\"color:#0f0;\">${targetChar}</span>`;
+          }
+          tIdx++;
+        }
+        targetDisplay.innerHTML = html;
+      } else {
+        targetDisplay.innerHTML = '';
+      }
+    });
+    // Also update on asteroid spawn
+    function updateTargetDisplay() {
+      if (asteroids.length > 0) {
+        const target = asteroids[0].text;
+        const typed = input.value;
+        let html = '';
+        let tIdx = 0, iIdx = 0;
+        while (tIdx < target.length) {
+          const targetChar = target[tIdx];
+          if (!/[a-zA-Z0-9 ]/.test(targetChar)) {
+            html += `<span style=\"color:#0f0;opacity:0.5;\">${targetChar}</span>`;
+            tIdx++;
+            continue;
+          }
+          let typedChar = '';
+          while (iIdx < typed.length && !/[a-zA-Z0-9 ]/.test(typed[iIdx])) iIdx++;
+          if (iIdx < typed.length) typedChar = typed[iIdx];
+          if (typedChar && typedChar.toLowerCase() === targetChar.toLowerCase()) {
+            html += `<span style=\"color:#4cf;\">${targetChar}</span>`;
+            iIdx++;
+          } else if (typedChar) {
+            html += `<span style=\"color:#f44;\">${targetChar}</span>`;
+            iIdx++;
+          } else {
+            html += `<span style=\"color:#0f0;\">${targetChar}</span>`;
+          }
+          tIdx++;
+        }
+        targetDisplay.innerHTML = html;
+      } else {
+        targetDisplay.innerHTML = '';
+      }
+    }
+    setInterval(() => updateTargetDisplay(), 100);
+    setInterval(spawnAsteroid, 2000);
+    updateGame();
+  </script>
+</body>
+</html>
